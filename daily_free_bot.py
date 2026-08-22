@@ -44,6 +44,7 @@ Output ONLY the raw spoken text. Do NOT include titles, speaker tags, or scene b
 """
 
 MAX_WORDS = 220
+GEMINI_MODEL = "gemini-3.6-flash"
 GENERATION_RETRIES = 2
 TTS_RETRIES = 2
 
@@ -63,30 +64,10 @@ def enforce_word_limit(text: str, max_words: int = MAX_WORDS) -> str:
         return text.strip()
     return " ".join(words[:max_words])
 
-def get_best_model():
-    genai.configure(api_key=GEMINI_API_KEY)
-    available_models = [
-        m.name for m in genai.list_models()
-        if 'generateContent' in m.supported_generation_methods
-    ]
-    logger.info("Available models for this key: %s", available_models)
-    
-    # Pick the best available text generation model
-    for candidate in ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']:
-        for m_name in available_models:
-            if candidate in m_name:
-                clean_name = m_name.replace("models/", "")
-                logger.info("Selected model: %s", clean_name)
-                return clean_name
-    
-    if available_models:
-        return available_models[0].replace("models/", "")
-    raise RuntimeError("No compatible text generation models found for this API key.")
-
 def generate_scripts() -> List[Dict]:
-    model_name = get_best_model()
+    genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel(
-        model_name=model_name,
+        model_name=GEMINI_MODEL,
         system_instruction=SYSTEM_PROMPT
     )
     
