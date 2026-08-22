@@ -18,7 +18,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install google-genai edge-tts
+        run: pip install google-generativeai edge-tts
 
       - name: Run script & Send Audio Email
         env:
