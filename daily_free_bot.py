@@ -1,4 +1,4 @@
-                ximport os
+                import os
 import asyncio
 import smtplib
 import tempfile
