@@ -10,7 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from typing import List, Dict
 
-from google import genai
+import google.generativeai as genai
 import edge_tts
 
 logging.basicConfig(level=logging.INFO)
@@ -44,7 +44,7 @@ Output ONLY the raw spoken text. Do NOT include titles, speaker tags, or scene b
 """
 
 MAX_WORDS = 220
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-1.5-flash"
 GENERATION_RETRIES = 2
 TTS_RETRIES = 2
 
@@ -65,17 +65,19 @@ def enforce_word_limit(text: str, max_words: int = MAX_WORDS) -> str:
     return " ".join(words[:max_words])
 
 def generate_scripts() -> List[Dict]:
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel(
+        model_name=GEMINI_MODEL,
+        system_instruction=SYSTEM_PROMPT
+    )
+    
     scripts = []
     for i, theme in enumerate(THEMES, start=1):
-        prompt = f"{SYSTEM_PROMPT}\n\nScenario: {theme}"
+        prompt = f"Scenario: {theme}"
         logger.info("Generating script %d/%d for theme: %s", i, len(THEMES), theme)
         for attempt in range(1, GENERATION_RETRIES + 1):
             try:
-                response = client.models.generate_content(
-                    model=GEMINI_MODEL,
-                    contents=prompt
-                )
+                response = model.generate_content(prompt)
                 text = response.text.strip()
                 text = enforce_word_limit(text, MAX_WORDS)
                 scripts.append({"index": i, "theme": theme, "text": text})
