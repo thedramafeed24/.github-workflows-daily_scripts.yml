@@ -44,7 +44,7 @@ Output ONLY the raw spoken text. Do NOT include titles, speaker tags, or scene b
 """
 
 MAX_WORDS = 220
-GEMINI_MODEL = "gemini-1.5-flash-latest"
+GEMINI_MODEL = "gemini-1.5-flash-002"
 GENERATION_RETRIES = 2
 TTS_RETRIES = 2
 
