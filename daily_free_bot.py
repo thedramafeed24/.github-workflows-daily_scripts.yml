@@ -10,7 +10,8 @@ from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from typing import List, Dict
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import edge_tts
 
 logging.basicConfig(level=logging.INFO)
@@ -33,18 +34,20 @@ THEMES = [
 ]
 
 SYSTEM_PROMPT = """
-You are a viral short-form fiction narrator. Write a 1st-person Reddit-style revenge/drama script under 220 words.
-Structure:
-- Hook (0-3s): Direct public humiliation or disrespect in front of peers/family.
-- Action: Cold, calm, immediate consequence from narrator.
-- Fallout: Offender spiraling, third parties siding with narrator.
-- Outro: Punchy closing statement on self-respect.
+You are an elite short-form drama writer. Create an original, hyper-realistic, 1st-person revenge/drama script under 220 words.
 
-Output ONLY the raw spoken text. Do NOT include titles, speaker tags, or scene brackets.
+Rules:
+- DO NOT use cliché tropes (e.g., throwing a ring into a glass, leaving someone with a restaurant bill, or pouring a drink).
+- The revenge must be clever, legal, calculated, and modern (involving contracts, digital footprints, family politics, or financial leverage).
+- Tone: Cold, composed, and devastating.
+- Hook (0-3s): Drop straight into a specific, shocking moment of betrayal or disrespect without throat-clearing.
+- Climax: An immediate, unexpected twist where the narrator reveals they held all the cards from the start.
+
+Output ONLY the raw spoken text. No titles, intro phrases, or bracketed directions.
 """
 
 MAX_WORDS = 220
-GEMINI_MODEL = "gemini-pro"
+GEMINI_MODEL = "gemini-2.5-flash"
 GENERATION_RETRIES = 2
 TTS_RETRIES = 2
 
@@ -65,11 +68,7 @@ def enforce_word_limit(text: str, max_words: int = MAX_WORDS) -> str:
     return " ".join(words[:max_words])
 
 def generate_scripts() -> List[Dict]:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        system_instruction=SYSTEM_PROMPT
-    )
+    client = genai.Client(api_key=GEMINI_API_KEY)
     
     scripts = []
     for i, theme in enumerate(THEMES, start=1):
@@ -77,7 +76,14 @@ def generate_scripts() -> List[Dict]:
         logger.info("Generating script %d/%d for theme: %s", i, len(THEMES), theme)
         for attempt in range(1, GENERATION_RETRIES + 1):
             try:
-                response = model.generate_content(prompt)
+                response = client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        temperature=0.85,
+                    )
+                )
                 text = response.text.strip()
                 text = enforce_word_limit(text, MAX_WORDS)
                 scripts.append({"index": i, "theme": theme, "text": text})
