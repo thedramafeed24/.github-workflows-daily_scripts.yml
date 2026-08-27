@@ -122,10 +122,18 @@ def generate_scripts() -> List[Dict]:
   return scripts
 
 
-async def text_to_speech(text: str, output_path: Path, voice: str = VOICE):
+async def text_to_speech(
+    text: str,
+    output_path: Path,
+    voice: str = "en-US-GuyNeural",
+    rate: str = "+5%",
+    pitch: str = "-2Hz",
+):
   for attempt in range(1, TTS_RETRIES + 1):
     try:
-      communicate = edge_tts.Communicate(text, voice)
+      communicate = edge_tts.Communicate(
+          text=text, voice=voice, rate=rate, pitch=pitch
+      )
       await communicate.save(str(output_path))
       return
     except Exception:
