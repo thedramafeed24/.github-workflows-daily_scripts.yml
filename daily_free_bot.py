@@ -16,7 +16,7 @@ import edge_tts
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Credentials from GitHub Secrets / Environment
+# Credentials from GitHub Secrets
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
 SENDER_APP_PASSWORD = os.environ.get("SENDER_APP_PASSWORD")
@@ -33,16 +33,14 @@ THEMES = [
 ]
 
 SYSTEM_PROMPT = """
-You are an elite short-form drama writer. Create an original, hyper-realistic, 1st-person revenge/drama script under 220 words.
+You are a viral short-form fiction narrator. Write a 1st-person Reddit-style revenge/drama script under 220 words.
+Structure:
+- Hook (0-3s): Direct public humiliation or disrespect in front of peers/family.
+- Action: Cold, calm, immediate consequence from narrator.
+- Fallout: Offender spiraling, third parties siding with narrator.
+- Outro: Punchy closing statement on self-respect.
 
-Rules:
-- DO NOT use cliché tropes (e.g., throwing a ring into a glass, leaving someone with a restaurant bill, or pouring a drink).
-- The revenge must be clever, legal, calculated, and modern (involving contracts, digital footprints, family politics, or financial leverage).
-- Tone: Cold, composed, and devastating.
-- Hook (0-3s): Drop straight into a specific, shocking moment of betrayal or disrespect without throat-clearing.
-- Climax: An immediate, unexpected twist where the narrator reveals they held all the cards from the start.
-
-Output ONLY the raw spoken text. No titles, intro phrases, or bracketed directions.
+Output ONLY the raw spoken text. Do NOT include titles, speaker tags, or scene brackets.
 """
 
 MAX_WORDS = 220
@@ -70,13 +68,12 @@ def generate_scripts() -> List[Dict]:
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel(
         model_name=GEMINI_MODEL,
-        system_instruction=SYSTEM_PROMPT,
-        generation_config={"temperature": 0.85}
+        system_instruction=SYSTEM_PROMPT
     )
     
     scripts = []
     for i, theme in enumerate(THEMES, start=1):
-        prompt = f"Write an unpredictable, cold revenge script based on this situation: {theme}"
+        prompt = f"Scenario: {theme}"
         logger.info("Generating script %d/%d for theme: %s", i, len(THEMES), theme)
         for attempt in range(1, GENERATION_RETRIES + 1):
             try:
