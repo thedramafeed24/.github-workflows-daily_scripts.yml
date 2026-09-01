@@ -30,28 +30,48 @@ RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL")
 MALE_VOICE = "en-US-ChristopherNeural"
 FEMALE_VOICE = "en-US-AvaNeural"
 
-THEMES = [
-    (
-        "Fiancé and my maid of honor secretly conspired to drain my family trust after the wedding, "
-        "unaware the prenup contains an immediate fault-based asset forfeiture clause."
-    ),
-    (
-        "In-laws publicly humiliated me at an anniversary dinner to announce their golden child gets the family penthouse, "
-        "unaware the deed, mortgage, and equity are owned by my private LLC."
-    ),
-    (
-        "Spouse and their executive lover orchestrated my dismissal to hide their affair, "
-        "blind to the fact that the forensic audit I triggered logged every transaction and hotel receipt."
-    ),
-    (
-        "Mother-in-law secretly swapped my late mother's heirloom jewelry with fakes for her daughter's wedding, "
-        "unaware the genuine pieces were vault-locked with micro-engraved serial tags."
-    ),
-    (
-        "Husband's wealthy family staged a public paternity accusation at the baby shower to disinherit me, "
-        "unaware the fertility clinic records on the projector proved he was sterile all along."
-    ),
+import random
+
+THEME_POOL = [
+    # 1. Wedding & Prenup Betrayals
+    "Fiancé and maid of honor secretly conspired to drain family trust funds after the wedding, unaware the prenup contains an immediate fault-based asset forfeiture clause.",
+    "Groom's family demanded I sign away my pre-marital properties 10 minutes before walking down the aisle, unaware the officiant and venue are under my private corporate name.",
+    "Bride's parents secretly redirected the wedding reception budget to pay off their golden son's gambling debt, unaware the vendors were contracted under strict personal liability clauses.",
+    "Fiancé staged a fake infidelity scenario to break off our engagement without returning the family heirloom ring, unaware private surveillance logged his staged meetup.",
+    "In-laws attempted to force a post-nuptial agreement during the honeymoon, unaware all marital property had already been placed into an irrevocable blind trust.",
+
+    # 2. Inheritance & Will Frauds
+    "In-laws publicly humiliated me at an anniversary dinner to announce their favorite child gets the family penthouse, unaware the deed, mortgage, and equity are owned by my LLC.",
+    "Siblings altered our late parent's living will while I was overseas, unaware the original recorded video deposition is vaulted with the state probate registry.",
+    "Stepmother attempted to lock me out of the family estate reading, unaware my mother's original trust requires a mandatory 100% forensic audit prior to asset transfer.",
+    "Relatives auctioned off my late grandmother's antique collection behind my back, unaware each authentic item was micro-chipped and tracked via registered insurance tags.",
+    "Estranged father attempted to claim sole ownership of my childhood home upon remarriage, unaware the title deed was legally transferred to my name five years prior.",
+
+    # 3. Infidelity & Secret Trapdoor Climax
+    "Spouse and their executive partner orchestrated my termination to hide their affair, unaware the forensic audit I triggered logged every expense report and flight booking.",
+    "Partner bought a luxury condo under a shell company to host their affair, unaware I am the primary equity stakeholder of the parent management entity.",
+    "Spouse attempted to wipe joint bank accounts before filing for divorce, unaware the automated freeze trigger flagged the transfers as illegal dissipation of marital assets.",
+    "Partner introduced their secret lover as a new corporate consultant, unaware our board of directors requires full conflict-of-interest background clearances.",
+    "Spouse staged a fake home burglary to claim insurance on my high-end watch collection, unaware hidden indoor cameras uploaded high-resolution backups to the cloud.",
+
+    # 4. Family Humiliation & Public Ambushes
+    "Husband's wealthy family staged a public paternity accusation at the baby shower to disinherit me, unaware the fertility clinic records on the projector proved he was sterile all along.",
+    "Mother-in-law secretly swapped my late mother's heirloom jewelry with replicas for her daughter's wedding, unaware the genuine pieces were vaulted with serial tags.",
+    "In-laws excluded me from the annual family portrait in front of 50 guests, unaware the venue, catering, and staff were funded entirely by my credit line.",
+    "Sister-in-law attempted to move into my vacation villa while I was traveling, unaware the smart-lock security grid automatically deadbolts unauthorized entries.",
+    "Family staged an intervention demanding I pay off my brother's debt, unaware my private investigator documented his secret offshore luxury assets.",
+
+    # 5. Elite Workplace & Financial Sabotage
+    "Business partner secretly signed an exclusive vendor contract to siphon startup profits, unaware the partnership agreement requires unanimous board consent for all vendor agreements.",
+    "Executive manager blocked my promotion while claiming credit for my patent build, unaware the repository timestamp logs verified my sole authorship.",
+    "Co-worker deleted executive audit data from my workstation to frame me, unaware the enterprise shadow server creates an unalterable real-time ledger.",
+    "Company founders tried to dilute my equity stake hours before an acquisition buyout, unaware my original vesting contract contains a non-dilution veto clause.",
+    "Manager forced me to train their unqualified nephew before attempting to fire me, unaware the client retention agreement is legally tied directly to my personal consulting license."
 ]
+
+def get_daily_themes(count: int = 5) -> List[str]:
+    """Randomly selects distinct scenarios from different drama categories each run."""
+    return random.sample(THEME_POOL, count)
 
 SYSTEM_PROMPT = """
 You are a master short-form drama writer creating viral, hyper-realistic, 1st-person revenge stories for Shorts and Reels.
