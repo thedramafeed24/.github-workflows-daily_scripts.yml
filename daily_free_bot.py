@@ -7,6 +7,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import random
 import re
 import smtplib
 import tempfile
@@ -30,8 +31,7 @@ RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL")
 MALE_VOICE = "en-US-ChristopherNeural"
 FEMALE_VOICE = "en-US-AvaNeural"
 
-import random
-
+# 25-Scenario Rotation Pool
 THEME_POOL = [
     # 1. Wedding & Prenup Betrayals
     "Fiancé and maid of honor secretly conspired to drain family trust funds after the wedding, unaware the prenup contains an immediate fault-based asset forfeiture clause.",
@@ -47,7 +47,7 @@ THEME_POOL = [
     "Relatives auctioned off my late grandmother's antique collection behind my back, unaware each authentic item was micro-chipped and tracked via registered insurance tags.",
     "Estranged father attempted to claim sole ownership of my childhood home upon remarriage, unaware the title deed was legally transferred to my name five years prior.",
 
-    # 3. Infidelity & Secret Trapdoor Climax
+    # 3. Infidelity & Trapdoor Payoffs
     "Spouse and their executive partner orchestrated my termination to hide their affair, unaware the forensic audit I triggered logged every expense report and flight booking.",
     "Partner bought a luxury condo under a shell company to host their affair, unaware I am the primary equity stakeholder of the parent management entity.",
     "Spouse attempted to wipe joint bank accounts before filing for divorce, unaware the automated freeze trigger flagged the transfers as illegal dissipation of marital assets.",
@@ -68,10 +68,6 @@ THEME_POOL = [
     "Company founders tried to dilute my equity stake hours before an acquisition buyout, unaware my original vesting contract contains a non-dilution veto clause.",
     "Manager forced me to train their unqualified nephew before attempting to fire me, unaware the client retention agreement is legally tied directly to my personal consulting license."
 ]
-
-def get_daily_themes(count: int = 5) -> List[str]:
-    """Randomly selects distinct scenarios from different drama categories each run."""
-    return random.sample(THEME_POOL, count)
 
 SYSTEM_PROMPT = """
 You are a master short-form drama writer creating viral, hyper-realistic, 1st-person revenge stories for Shorts and Reels.
@@ -100,7 +96,8 @@ OUTPUT FORMAT: Strict JSON Array containing exactly 5 objects. No markdown backt
 MAX_WORDS = 150
 PRIMARY_MODELS = [
     "gemini-3.6-flash",
-    "gemini-3.1-pro-preview",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
 ]
 
 
@@ -134,23 +131,12 @@ def enforce_word_limit(text: str, max_words: int = MAX_WORDS) -> str:
     return " ".join(words[:max_words])
 
 
-def get_available_models(client) -> List[str]:
-    """Combines prioritized models with dynamic model discovery."""
-    discovered = []
-    try:
-        for m in client.models.list():
-            model_name = m.name.replace("models/", "")
-            if "gemini" in model_name and model_name not in PRIMARY_MODELS:
-                discovered.append(model_name)
-    except Exception as e:
-        logger.warning("Dynamic model listing skipped: %s", e)
-
-    return PRIMARY_MODELS + discovered
+def get_daily_themes(count: int = 5) -> List[str]:
+    return random.sample(THEME_POOL, count)
 
 
 def generate_all_scripts() -> List[Dict]:
     client = genai.Client(api_key=GEMINI_API_KEY)
-    models_to_try = get_available_models(client)
     selected_themes = get_daily_themes(5)
 
     prompt_content = "Generate scripts for these 5 scenarios:\n"
@@ -158,9 +144,8 @@ def generate_all_scripts() -> List[Dict]:
         prompt_content += f"{i}. {theme}\n"
 
     logger.info("Selected Themes for today's run:\n%s", prompt_content)
-    # ... rest of the single-call generation function remains the same ...
 
-    for model_name in models_to_try:
+    for model_name in PRIMARY_MODELS:
         logger.info("Attempting generation using model: %s", model_name)
         for attempt in range(1, 3):
             try:
@@ -177,7 +162,7 @@ def generate_all_scripts() -> List[Dict]:
 
                 scripts = []
                 for i, item in enumerate(parsed_list, start=1):
-                    theme = THEMES[i - 1] if i <= len(THEMES) else item.get("title", "")
+                    theme = selected_themes[i - 1] if i <= len(selected_themes) else item.get("title", "")
                     gender = item.get("narrator_gender", "female").strip().lower()
                     text = enforce_word_limit(item.get("text", ""), MAX_WORDS)
                     title = item.get("title", f"Revenge Story {i}").strip()
@@ -204,11 +189,10 @@ def generate_all_scripts() -> List[Dict]:
                 err_str = str(exc)
                 logger.warning("Attempt %d on %s failed: %s", attempt, model_name, err_str)
                 if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    logger.info("Rate limit hit on %s. Switching to next model candidate...", model_name)
-                    break  # Move immediately to next model candidate
+                    break
                 time.sleep(2)
 
-    raise RuntimeError("All candidate models failed. If daily quota is exhausted, create a new project key in AI Studio.")
+    raise RuntimeError("Generation failed across all models. Verify API quota in Google AI Studio.")
 
 
 async def text_to_speech(
