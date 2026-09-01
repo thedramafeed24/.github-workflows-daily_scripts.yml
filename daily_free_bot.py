@@ -151,12 +151,14 @@ def get_available_models(client) -> List[str]:
 def generate_all_scripts() -> List[Dict]:
     client = genai.Client(api_key=GEMINI_API_KEY)
     models_to_try = get_available_models(client)
+    selected_themes = get_daily_themes(5)
 
     prompt_content = "Generate scripts for these 5 scenarios:\n"
-    for i, theme in enumerate(THEMES, start=1):
+    for i, theme in enumerate(selected_themes, start=1):
         prompt_content += f"{i}. {theme}\n"
 
-    logger.info("Candidate models: %s", models_to_try)
+    logger.info("Selected Themes for today's run:\n%s", prompt_content)
+    # ... rest of the single-call generation function remains the same ...
 
     for model_name in models_to_try:
         logger.info("Attempting generation using model: %s", model_name)
