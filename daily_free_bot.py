@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import smtplib
 import tempfile
+import time
 from typing import Dict, List
 
 import edge_tts
@@ -55,26 +56,30 @@ THEMES = [
 SYSTEM_PROMPT = """
 You are a master short-form drama writer creating viral, hyper-realistic, 1st-person revenge stories for Shorts and Reels.
 
-NARRATIVE ARCHITECTURE (Target: 130 to 145 words total for spoken text):
+You will be given a list of 5 scenarios. Write a complete production-ready script for each scenario.
+
+EACH SCRIPT MUST STRICTLY FOLLOW THIS ARCHITECTURE (Target: 130 to 145 words spoken text):
 1. HOOK (0-3s): Drop straight into a specific, jaw-dropping moment of public betrayal, disrespect, or family humiliation.
 2. ESCALATION (4-30s): The antagonist visibly celebrates their perceived victory, assuming the narrator is defenseless.
 3. THE TRAP / TWIST (31-40s): Reveal the narrator anticipated the betrayal months prior using concrete leverage (forensic audits, property deeds, prenups, digital receipts, vault records, or legal traps).
 4. THE RUIN (41-45s): Irreversible legal, financial, or social devastation for the antagonist.
 5. INFINITE LOOP LINE (Last sentence): Craft the final phrase so it seamlessly flows syntactically straight back into the first sentence.
 
-OUTPUT FORMAT (Strict JSON only, no markdown backticks):
-{
-  "title": "High-CTR click-worthy title under 50 characters",
-  "visual_hook_text": "PUNCHY 4-7 WORD ALL-CAPS ON-SCREEN TEXT (e.g., 'THEY FORGOT WHO OWNS THE DEED 💀')",
-  "narrator_gender": "female" or "male",
-  "text": "Full narrative spoken voiceover text..."
-}
+OUTPUT FORMAT: Strict JSON Array containing exactly 5 objects. No markdown backticks:
+[
+  {
+    "index": 1,
+    "title": "High-CTR click-worthy title under 45 characters",
+    "visual_hook_text": "PUNCHY 4-7 WORD ALL-CAPS BANNER (e.g., 'THEY FORGOT WHO OWNS THE DEED 💀')",
+    "narrator_gender": "female" or "male",
+    "text": "Full narrative spoken voiceover text..."
+  },
+  ...
+]
 """
 
 MAX_WORDS = 150
 GEMINI_MODEL = "gemini-3.6-flash"
-GENERATION_RETRIES = 2
-TTS_RETRIES = 2
 
 
 def validate_env():
@@ -95,7 +100,6 @@ def validate_env():
 
 
 def sanitize_filename(title: str) -> str:
-    """Converts a title into a safe, clean filename."""
     clean = re.sub(r"[^\w\s-]", "", title).strip()
     clean = re.sub(r"[-\s]+", "_", clean)
     return clean[:45].strip("_")
@@ -108,64 +112,64 @@ def enforce_word_limit(text: str, max_words: int = MAX_WORDS) -> str:
     return " ".join(words[:max_words])
 
 
-MODEL_CANDIDATES = [
-    "gemini-3.6-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-]
-
-def generate_scripts() -> List[Dict]:
+def generate_all_scripts() -> List[Dict]:
+    """Generates all 5 scripts in a single API call to prevent rate limiting."""
     client = genai.Client(api_key=GEMINI_API_KEY)
-    scripts = []
 
+    prompt_content = "Generate scripts for these 5 scenarios:\n"
     for i, theme in enumerate(THEMES, start=1):
-        prompt = f"Scenario: {theme}"
-        logger.info("Generating script %d/%d for theme: %s", i, len(THEMES), theme)
-        
-        success = False
-        for model_name in MODEL_CANDIDATES:
-            for attempt in range(1, GENERATION_RETRIES + 1):
-                try:
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            system_instruction=SYSTEM_PROMPT,
-                            temperature=0.80,
-                        ),
-                    )
-                    raw_json = response.text.replace("```json", "").replace("```", "").strip()
-                    parsed = json.loads(raw_json)
+        prompt_content += f"{i}. {theme}\n"
 
-                    gender = parsed.get("narrator_gender", "female").strip().lower()
-                    text = enforce_word_limit(parsed.get("text", ""), MAX_WORDS)
-                    title = parsed.get("title", f"Revenge Story {i}").strip()
-                    visual_hook_text = parsed.get("visual_hook_text", "WAIT FOR THE END 💀").strip()
+    logger.info("Requesting all 5 scripts in a single batch request...")
 
-                    voice = FEMALE_VOICE if "female" in gender else MALE_VOICE
-                    filename = f"{i}_{sanitize_filename(title)}.mp3"
+    # Retry with wait time if rate-limited
+    for attempt in range(1, 4):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt_content,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    temperature=0.80,
+                ),
+            )
+            raw_json = response.text.replace("```json", "").replace("```", "").strip()
+            parsed_list = json.loads(raw_json)
 
-                    scripts.append({
-                        "index": i,
-                        "theme": theme,
-                        "title": title,
-                        "filename": filename,
-                        "visual_hook_text": visual_hook_text,
-                        "gender": gender,
-                        "voice": voice,
-                        "text": text,
-                    })
-                    success = True
-                    break
-                except Exception as exc:
-                    logger.warning("Attempt %d on model %s failed: %s", attempt, model_name, exc)
-            if success:
-                break
+            scripts = []
+            for i, item in enumerate(parsed_list, start=1):
+                theme = THEMES[i - 1] if i <= len(THEMES) else item.get("title", "")
+                gender = item.get("narrator_gender", "female").strip().lower()
+                text = enforce_word_limit(item.get("text", ""), MAX_WORDS)
+                title = item.get("title", f"Revenge Story {i}").strip()
+                visual_hook_text = item.get("visual_hook_text", "WAIT FOR THE END 💀").strip()
 
-        if not success:
-            raise RuntimeError(f"Failed to generate script for theme '{theme}' across all models.")
+                voice = FEMALE_VOICE if "female" in gender else MALE_VOICE
+                filename = f"{i}_{sanitize_filename(title)}.mp3"
 
-    return scripts
+                scripts.append({
+                    "index": i,
+                    "theme": theme,
+                    "title": title,
+                    "filename": filename,
+                    "visual_hook_text": visual_hook_text,
+                    "gender": gender,
+                    "voice": voice,
+                    "text": text,
+                })
+
+            logger.info("Successfully generated and parsed all 5 scripts!")
+            return scripts
+
+        except Exception as exc:
+            logger.warning("Attempt %d failed: %s", attempt, exc)
+            if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+                logger.info("Rate limit hit. Sleeping for 60 seconds before retrying...")
+                time.sleep(60)
+            elif attempt == 3:
+                raise RuntimeError("Failed to generate batch scripts after 3 attempts.") from exc
+            else:
+                time.sleep(5)
 
 
 async def text_to_speech(
@@ -175,7 +179,7 @@ async def text_to_speech(
     rate: str = "+12%",
     pitch: str = "-1Hz",
 ):
-    for attempt in range(1, TTS_RETRIES + 1):
+    for attempt in range(1, 3):
         try:
             communicate = edge_tts.Communicate(
                 text=text, voice=voice, rate=rate, pitch=pitch
@@ -184,9 +188,9 @@ async def text_to_speech(
             return
         except Exception:
             logger.exception("TTS attempt %d failed for %s", attempt, output_path)
-            if attempt == TTS_RETRIES:
+            if attempt == 2:
                 raise
-            await asyncio.sleep(1 + attempt)
+            await asyncio.sleep(2)
 
 
 def build_email_message(
@@ -250,8 +254,8 @@ async def main():
     validate_env()
     today = datetime.now().strftime("%Y-%m-%d")
 
-    logger.info("Starting generation of 5 drama scripts with matching titles & audio filenames...")
-    scripts = await asyncio.to_thread(generate_scripts)
+    logger.info("Starting batch script generation...")
+    scripts = await asyncio.to_thread(generate_all_scripts)
 
     temp_files: List[Path] = []
     tts_tasks = []
@@ -263,12 +267,12 @@ async def main():
             temp_files.append(tmp)
             tts_tasks.append(text_to_speech(item["text"], tmp, item["voice"]))
 
-        logger.info("Synthesizing voiceovers...")
+        logger.info("Synthesizing voiceovers concurrently...")
         await asyncio.gather(*tts_tasks)
 
         msg = build_email_message(scripts, temp_files, today)
 
-        logger.info("Sending batch email to %s...", RECEIVER_EMAIL)
+        logger.info("Sending email to %s...", RECEIVER_EMAIL)
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
             server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
@@ -284,6 +288,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-if __name__ == "__main__":
-  asyncio.run(main())
