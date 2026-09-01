@@ -78,10 +78,9 @@ OUTPUT FORMAT: Strict JSON Array containing exactly 5 objects. No markdown backt
 """
 
 MAX_WORDS = 150
-FALLBACK_MODELS = [
+PRIMARY_MODELS = [
     "gemini-3.6-flash",
-    "gemini-2.5-flash",
-    "gemini-2.5-pro",
+    "gemini-3.1-pro-preview",
 ]
 
 
@@ -115,16 +114,31 @@ def enforce_word_limit(text: str, max_words: int = MAX_WORDS) -> str:
     return " ".join(words[:max_words])
 
 
+def get_available_models(client) -> List[str]:
+    """Combines prioritized models with dynamic model discovery."""
+    discovered = []
+    try:
+        for m in client.models.list():
+            model_name = m.name.replace("models/", "")
+            if "gemini" in model_name and model_name not in PRIMARY_MODELS:
+                discovered.append(model_name)
+    except Exception as e:
+        logger.warning("Dynamic model listing skipped: %s", e)
+
+    return PRIMARY_MODELS + discovered
+
+
 def generate_all_scripts() -> List[Dict]:
     client = genai.Client(api_key=GEMINI_API_KEY)
+    models_to_try = get_available_models(client)
 
     prompt_content = "Generate scripts for these 5 scenarios:\n"
     for i, theme in enumerate(THEMES, start=1):
         prompt_content += f"{i}. {theme}\n"
 
-    logger.info("Requesting 5 batch scripts from Gemini...")
+    logger.info("Candidate models: %s", models_to_try)
 
-    for model_name in FALLBACK_MODELS:
+    for model_name in models_to_try:
         logger.info("Attempting generation using model: %s", model_name)
         for attempt in range(1, 3):
             try:
@@ -165,10 +179,14 @@ def generate_all_scripts() -> List[Dict]:
                 return scripts
 
             except Exception as exc:
-                logger.warning("Attempt %d on %s failed: %s", attempt, model_name, exc)
-                time.sleep(3)
+                err_str = str(exc)
+                logger.warning("Attempt %d on %s failed: %s", attempt, model_name, err_str)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    logger.info("Rate limit hit on %s. Switching to next model candidate...", model_name)
+                    break  # Move immediately to next model candidate
+                time.sleep(2)
 
-    raise RuntimeError("All candidate models failed or daily quota exhausted. Please provide a fresh API key.")
+    raise RuntimeError("All candidate models failed. If daily quota is exhausted, create a new project key in AI Studio.")
 
 
 async def text_to_speech(
