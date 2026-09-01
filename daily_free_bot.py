@@ -108,6 +108,12 @@ def enforce_word_limit(text: str, max_words: int = MAX_WORDS) -> str:
     return " ".join(words[:max_words])
 
 
+MODEL_CANDIDATES = [
+    "gemini-3.6-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+]
+
 def generate_scripts() -> List[Dict]:
     client = genai.Client(api_key=GEMINI_API_KEY)
     scripts = []
@@ -115,42 +121,50 @@ def generate_scripts() -> List[Dict]:
     for i, theme in enumerate(THEMES, start=1):
         prompt = f"Scenario: {theme}"
         logger.info("Generating script %d/%d for theme: %s", i, len(THEMES), theme)
-        for attempt in range(1, GENERATION_RETRIES + 1):
-            try:
-                response = client.models.generate_content(
-                    model=GEMINI_MODEL,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        temperature=0.80,
-                    ),
-                )
-                raw_json = response.text.replace("```json", "").replace("```", "").strip()
-                parsed = json.loads(raw_json)
+        
+        success = False
+        for model_name in MODEL_CANDIDATES:
+            for attempt in range(1, GENERATION_RETRIES + 1):
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_PROMPT,
+                            temperature=0.80,
+                        ),
+                    )
+                    raw_json = response.text.replace("```json", "").replace("```", "").strip()
+                    parsed = json.loads(raw_json)
 
-                gender = parsed.get("narrator_gender", "female").strip().lower()
-                text = enforce_word_limit(parsed.get("text", ""), MAX_WORDS)
-                title = parsed.get("title", f"Revenge Story {i}").strip()
-                visual_hook_text = parsed.get("visual_hook_text", "WAIT FOR THE END 💀").strip()
+                    gender = parsed.get("narrator_gender", "female").strip().lower()
+                    text = enforce_word_limit(parsed.get("text", ""), MAX_WORDS)
+                    title = parsed.get("title", f"Revenge Story {i}").strip()
+                    visual_hook_text = parsed.get("visual_hook_text", "WAIT FOR THE END 💀").strip()
 
-                voice = FEMALE_VOICE if "female" in gender else MALE_VOICE
-                filename = f"{i}_{sanitize_filename(title)}.mp3"
+                    voice = FEMALE_VOICE if "female" in gender else MALE_VOICE
+                    filename = f"{i}_{sanitize_filename(title)}.mp3"
 
-                scripts.append({
-                    "index": i,
-                    "theme": theme,
-                    "title": title,
-                    "filename": filename,
-                    "visual_hook_text": visual_hook_text,
-                    "gender": gender,
-                    "voice": voice,
-                    "text": text,
-                })
+                    scripts.append({
+                        "index": i,
+                        "theme": theme,
+                        "title": title,
+                        "filename": filename,
+                        "visual_hook_text": visual_hook_text,
+                        "gender": gender,
+                        "voice": voice,
+                        "text": text,
+                    })
+                    success = True
+                    break
+                except Exception as exc:
+                    logger.warning("Attempt %d on model %s failed: %s", attempt, model_name, exc)
+            if success:
                 break
-            except Exception as exc:
-                logger.exception("Generation attempt %d failed for theme %s", attempt, theme)
-                if attempt == GENERATION_RETRIES:
-                    raise RuntimeError(f"Failed to generate script for theme '{theme}'") from exc
+
+        if not success:
+            raise RuntimeError(f"Failed to generate script for theme '{theme}' across all models.")
+
     return scripts
 
 
