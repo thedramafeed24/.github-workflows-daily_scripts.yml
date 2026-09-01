@@ -72,7 +72,7 @@ OUTPUT FORMAT (Strict JSON only, no markdown backticks):
 """
 
 MAX_WORDS = 150
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 GENERATION_RETRIES = 2
 TTS_RETRIES = 2
 
