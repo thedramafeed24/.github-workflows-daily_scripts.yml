@@ -73,13 +73,16 @@ OUTPUT FORMAT: Strict JSON Array containing exactly 5 objects. No markdown backt
     "visual_hook_text": "PUNCHY 4-7 WORD ALL-CAPS BANNER (e.g., 'THEY FORGOT WHO OWNS THE DEED 💀')",
     "narrator_gender": "female" or "male",
     "text": "Full narrative spoken voiceover text..."
-  },
-  ...
+  }
 ]
 """
 
 MAX_WORDS = 150
-GEMINI_MODEL = "gemini-3.6-flash"
+FALLBACK_MODELS = [
+    "gemini-3.6-flash",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+]
 
 
 def validate_env():
@@ -113,63 +116,59 @@ def enforce_word_limit(text: str, max_words: int = MAX_WORDS) -> str:
 
 
 def generate_all_scripts() -> List[Dict]:
-    """Generates all 5 scripts in a single API call to prevent rate limiting."""
     client = genai.Client(api_key=GEMINI_API_KEY)
 
     prompt_content = "Generate scripts for these 5 scenarios:\n"
     for i, theme in enumerate(THEMES, start=1):
         prompt_content += f"{i}. {theme}\n"
 
-    logger.info("Requesting all 5 scripts in a single batch request...")
+    logger.info("Requesting 5 batch scripts from Gemini...")
 
-    # Retry with wait time if rate-limited
-    for attempt in range(1, 4):
-        try:
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=prompt_content,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT,
-                    temperature=0.80,
-                ),
-            )
-            raw_json = response.text.replace("```json", "").replace("```", "").strip()
-            parsed_list = json.loads(raw_json)
+    for model_name in FALLBACK_MODELS:
+        logger.info("Attempting generation using model: %s", model_name)
+        for attempt in range(1, 3):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt_content,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        temperature=0.80,
+                    ),
+                )
+                raw_json = response.text.replace("```json", "").replace("```", "").strip()
+                parsed_list = json.loads(raw_json)
 
-            scripts = []
-            for i, item in enumerate(parsed_list, start=1):
-                theme = THEMES[i - 1] if i <= len(THEMES) else item.get("title", "")
-                gender = item.get("narrator_gender", "female").strip().lower()
-                text = enforce_word_limit(item.get("text", ""), MAX_WORDS)
-                title = item.get("title", f"Revenge Story {i}").strip()
-                visual_hook_text = item.get("visual_hook_text", "WAIT FOR THE END 💀").strip()
+                scripts = []
+                for i, item in enumerate(parsed_list, start=1):
+                    theme = THEMES[i - 1] if i <= len(THEMES) else item.get("title", "")
+                    gender = item.get("narrator_gender", "female").strip().lower()
+                    text = enforce_word_limit(item.get("text", ""), MAX_WORDS)
+                    title = item.get("title", f"Revenge Story {i}").strip()
+                    visual_hook_text = item.get("visual_hook_text", "WAIT FOR THE END 💀").strip()
 
-                voice = FEMALE_VOICE if "female" in gender else MALE_VOICE
-                filename = f"{i}_{sanitize_filename(title)}.mp3"
+                    voice = FEMALE_VOICE if "female" in gender else MALE_VOICE
+                    filename = f"{i}_{sanitize_filename(title)}.mp3"
 
-                scripts.append({
-                    "index": i,
-                    "theme": theme,
-                    "title": title,
-                    "filename": filename,
-                    "visual_hook_text": visual_hook_text,
-                    "gender": gender,
-                    "voice": voice,
-                    "text": text,
-                })
+                    scripts.append({
+                        "index": i,
+                        "theme": theme,
+                        "title": title,
+                        "filename": filename,
+                        "visual_hook_text": visual_hook_text,
+                        "gender": gender,
+                        "voice": voice,
+                        "text": text,
+                    })
 
-            logger.info("Successfully generated and parsed all 5 scripts!")
-            return scripts
+                logger.info("Successfully generated all 5 scripts with %s!", model_name)
+                return scripts
 
-        except Exception as exc:
-            logger.warning("Attempt %d failed: %s", attempt, exc)
-            if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
-                logger.info("Rate limit hit. Sleeping for 60 seconds before retrying...")
-                time.sleep(60)
-            elif attempt == 3:
-                raise RuntimeError("Failed to generate batch scripts after 3 attempts.") from exc
-            else:
-                time.sleep(5)
+            except Exception as exc:
+                logger.warning("Attempt %d on %s failed: %s", attempt, model_name, exc)
+                time.sleep(3)
+
+    raise RuntimeError("All candidate models failed or daily quota exhausted. Please provide a fresh API key.")
 
 
 async def text_to_speech(
